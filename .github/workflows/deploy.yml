@@ -1,0 +1,137 @@
+# =============================================================================
+# Release: publish the container image, then (optionally) deploy it.
+#
+# The build-and-publish half is real and runs on every version tag. The deploy
+# half is **gated behind `vars.DEPLOY_ENABLED`** and is deliberately inert until
+# someone configures a target — because a deploy job that silently does nothing
+# is worse than no deploy job at all: it reports success while shipping nothing.
+# =============================================================================
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  publish:
+    name: build + publish image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.tags }}
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # GHCR rejects uppercase repository names, so normalise first.
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: |
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: Summary
+        run: |
+          {
+            echo "### Published image"
+            echo ""
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo "digest: ${{ steps.build.outputs.digest }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: deploy
+    runs-on: ubuntu-latest
+    needs: publish
+    # Inert until a target exists. Set the repository variable DEPLOY_ENABLED to
+    # 'true' (and provide the credentials below) to turn it on.
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Migrate and roll out
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          DEPLOY_HOOK: ${{ secrets.DEPLOY_HOOK_URL }}
+          IMAGE: ${{ needs.publish.outputs.image }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_URL:-}" ] || [ -z "${DEPLOY_HOOK:-}" ]; then
+            echo "::error::DEPLOY_ENABLED is true but PRODUCTION_DATABASE_URL / DEPLOY_HOOK_URL are not set"
+            exit 1
+          fi
+
+          # Migrations are forward-only and idempotent, so running them before
+          # the new container starts is safe and is what makes a rollback a
+          # pure image swap.
+          echo "applying migrations"
+          uv run python -c "
+          from app.db.connection import connect
+          from app.db.schema import ensure_schema, current_version
+          with connect() as conn:
+              print('schema version:', ensure_schema(conn))
+          "
+
+          echo "triggering rollout of ${IMAGE}"
+          curl -fsS -X POST "$DEPLOY_HOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{\"image\": \"${IMAGE}\"}"
+
+      - name: Verify
+        env:
+          HEALTH_URL: ${{ vars.PRODUCTION_HEALTH_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HEALTH_URL:-}" ]; then
+            echo "::warning::PRODUCTION_HEALTH_URL is not set; skipping post-deploy verification"
+            exit 0
+          fi
+          for attempt in $(seq 1 20); do
+            if curl -fsS "$HEALTH_URL" | tee /tmp/health.json | grep -q '"status":"ok"'; then
+              echo "deployment healthy after ${attempt} attempt(s)"
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::deployment did not become healthy"
+          exit 1

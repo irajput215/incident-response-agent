@@ -1,0 +1,50 @@
+# =============================================================================
+# Local stack: PostgreSQL + the API.
+#
+#   docker compose up --build
+#   docker compose exec api adp-agent seed     # populate the simulated estate
+#   curl localhost:8000/health
+#
+# Host port 55432 rather than 5432 on purpose: a developer with Homebrew
+# PostgreSQL already listening on 5432 would otherwise get a port conflict that
+# looks like a database failure.
+# =============================================================================
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: incidents
+      POSTGRES_PASSWORD: incidents
+      POSTGRES_DB: ai_incidents
+    ports:
+      - "55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U incidents -d ai_incidents"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      # Points at the compose service, not localhost.
+      DATABASE_URL: postgresql://incidents:incidents@postgres:5432/ai_incidents
+      API_HOST: 0.0.0.0
+      API_PORT: "8000"
+      DB_AUTO_MIGRATE: "true"
+      # Deliberately empty: the stack runs the deterministic offline analyst out
+      # of the box, with no key and no spend. Set LLM_MODEL + a provider key to
+      # use a real model.
+      LLM_MODEL: ""
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
