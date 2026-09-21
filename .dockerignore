@@ -27,7 +27,15 @@ data/logs/
 data/estate.json
 *.duckdb
 
+# Not needed to run the service.
 tests/
-evals/
 docker/
-README.md
+
+# ⚠️ README.md must NOT be excluded. `pyproject.toml` declares
+# `readme = "README.md"`, so hatchling needs the file present to build the
+# package metadata — the build fails with `failed to compute cache key:
+# "/README.md": not found`. This was caught by the docker job in CI, which is
+# precisely what that job is for.
+#
+# evals/ is kept in the image so `adp-agent eval` works inside the container;
+# it is a few kilobytes and makes the image self-contained.
