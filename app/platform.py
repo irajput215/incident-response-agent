@@ -56,6 +56,10 @@ class Platform:
         if repository is not None:
             self.repo = repository
         else:
+            # Fail fast: a connection failure here raises and the process does
+            # not start. That is deliberate for a service whose entire job is
+            # reading the warehouse, and it is why `health()`'s unreachable
+            # branch is defence-in-depth rather than a state this path reaches.
             self._conn = connection or psycopg.connect(
                 self.settings.database_url, row_factory=dict_row, connect_timeout=5
             )
