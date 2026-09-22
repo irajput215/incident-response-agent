@@ -154,6 +154,31 @@ def test_a_bare_boolean_decision_is_accepted(agent: IncidentAgent) -> None:
     assert resumed.report.approval.approver == "unknown"
 
 
+def test_a_failed_run_records_the_cost_it_incurred(
+    seeded_estate, repository, metrics, llm
+) -> None:
+    """A FAILED row must distinguish "died immediately" from "spent the budget, then died".
+
+    `_fail` read the counters from the state passed *into* `_run` — which on a first
+    invocation is `initial_state(...)`, every counter zero — so everything the run did
+    before failing was discarded. The row said `llm_calls: 0` for a run that had made
+    several calls and gathered real evidence.
+    """
+    tight = seeded_estate.model_copy(update={"llm_max_calls_per_incident": 3})
+    agent = IncidentAgent(settings=tight, repository=repository, metrics=metrics, llm=llm)
+    outcome = agent.investigate(alert_for("missing_partition"))
+
+    assert outcome.status is IncidentStatus.FAILED
+    assert outcome.error is not None and "budget" in outcome.error.lower()
+
+    row = repository.get_investigation(outcome.investigation_id)
+    assert row["llm_calls"] > 0, "calls made before the failure must survive"
+    assert row["tool_calls"] > 0, "tool calls made before the failure must survive"
+    assert row["finished_at"] is not None
+    # The partial trace is returned rather than thrown away.
+    assert outcome.state.get("timeline"), "the timeline gathered so far is still useful"
+
+
 def test_a_rejected_remediation_does_not_claim_there_was_no_root_cause(
     agent: IncidentAgent,
 ) -> None:

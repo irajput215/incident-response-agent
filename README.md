@@ -11,7 +11,7 @@ The point is not "an LLM that describes an error". It is a controlled, observabl
 read-only SQL boundary, persisted state, a human in the loop, LangSmith tracing, and a CI
 gate that fails the build when root-cause accuracy drops.
 
-> **Status: all six roadmap phases implemented.** 228 tests, 8/8 evaluation tasks, clean
+> **Status: all six roadmap phases implemented.** 231 tests, 8/8 evaluation tasks, clean
 > `ruff` and `mypy`. See [What I verified](#what-i-verified) for the raw numbers and
 > [Limitations](#limitations) for what this deliberately does not do.
 
@@ -154,7 +154,7 @@ cp .env.example .env          # every value is optional
 uv sync --extra dev
 
 uv run adp-agent seed         # build the simulated estate + warehouse
-uv run pytest                 # 228 tests, no keys, no network
+uv run pytest                 # 231 tests, no keys, no network
 
 uv run python -m app.evaluation     # the agent gate: 8/8 tasks
 uv run adp-agent demo missing_partition
@@ -275,7 +275,7 @@ Numbers from an actual run on this machine, not aspirations:
 
 | Claim | Evidence |
 |---|---|
-| Test suite passes | `228 passed` (config, observability, SQL guard, tools, analyst, persistence, graph, API, evaluation) |
+| Test suite passes | `231 passed` (config, observability, SQL guard, tools, analyst, persistence, graph, API, evaluation) |
 | Agent evaluation passes | `8/8 = 100%`, exit code 0, no API key present |
 | Lint and types clean | `ruff check` → *All checks passed*; `mypy` → *no issues found in 38 source files* |
 | SQL guard holds | 20/20 adversarial inputs rejected, 8/8 legitimate queries allowed, target table intact after every attack |
@@ -298,7 +298,7 @@ observations, ~17k estimated tokens**, in under 150 ms.
 The most important section. A project with no stated limitations reads as one whose author
 has not looked.
 
-1. **The real provider path has never been executed.** Every run in this repository — all 230
+1. **The real provider path has never been executed.** Every run in this repository — all 231
    tests, all 8 evaluation tasks, the live API smoke test — went through the offline analyst.
    `LiteLLMClient` is structurally tested (response parsing, tool-call argument decoding, the
    structured-output repair loop) but **no HTTP request to Anthropic, OpenAI, DeepSeek or Ollama
@@ -394,7 +394,7 @@ ai-incident-agent/
 │   ├── evaluation/        task loading, evaluators, the CI gate
 │   └── api/               FastAPI routes and schemas
 ├── evals/tasks.yaml       the suite, as reviewable data
-├── tests/                 228 tests
+├── tests/                 231 tests
 ├── docker/, docker-compose.yml
 └── .github/workflows/     ci.yml · deploy.yml
 ```

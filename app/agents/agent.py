@@ -220,19 +220,58 @@ class IncidentAgent:
         error: str,
         state: IncidentState | None,
     ) -> InvestigationOutcome:
+        """Record a failed investigation **with the cost it incurred getting there**.
+
+        ``state`` is the state passed *into* ``_run`` — on a first invocation that is
+        ``initial_state(...)``, every counter at zero. Reading the counters from it was
+        a real defect: a run that spent its entire budget and *then* failed recorded
+        ``llm_calls: 0``, so a FAILED row could not distinguish "died immediately" from
+        "spent 20 calls then died". The live counters are in the checkpointer, so ask
+        it — and fall back to the passed-in state if that read fails, because this
+        method runs on the failure path and must not raise a second time.
+        """
         assert self.repo is not None
-        counters = _counters(state or {})
+        recovered = self._checkpointed_state(investigation_id)
+        counters = _counters(recovered if recovered is not None else (state or {}))
         self.repo.finish_investigation(
             investigation_id, IncidentStatus.FAILED, error=error, **counters
         )
         self.repo.set_incident_status(incident_id, IncidentStatus.FAILED)
         self.metrics.incr("agent.investigation_failed")
+        log(
+            _log,
+            30,
+            "investigation_failed",
+            investigation_id=investigation_id,
+            error=error[:200],
+            llm_calls=counters["llm_calls"],
+            tool_calls=counters["tool_calls"],
+            rounds=counters["rounds"],
+        )
         return InvestigationOutcome(
             incident_id=incident_id,
             investigation_id=investigation_id,
             status=IncidentStatus.FAILED,
             error=error,
+            state=dict(recovered or state or {}),
         )
+
+    def _checkpointed_state(self, investigation_id: str) -> dict[str, Any] | None:
+        """The live state for a run, or ``None`` if it cannot be read.
+
+        Best-effort by design: this is called from the failure path, where the
+        checkpointer may be exactly the thing that is broken. Losing the counters is
+        an acceptable degradation; raising a second exception is not.
+        """
+        try:
+            snapshot = self.graph.get_state(
+                {"configurable": {"thread_id": investigation_id}}
+            )
+        except Exception as exc:
+            log(_log, 30, "checkpoint_read_failed", error=str(exc)[:200])
+            return None
+        values = getattr(snapshot, "values", None)
+        return dict(values) if isinstance(values, dict) else None
 
     # --- helpers -----------------------------------------------------------
     def triage_preview(self, alert: IncidentCreate) -> Triage:
