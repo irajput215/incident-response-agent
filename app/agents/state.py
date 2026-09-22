@@ -216,6 +216,22 @@ def _summarise(
         return "Awaiting human approval."
 
     if status is IncidentStatus.UNRESOLVED:
+        # Three different situations end UNRESOLVED, and conflating them produced a
+        # report that contradicted itself: a rejected remediation printed "no
+        # confident root cause was established" directly above a root cause at 0.90
+        # confidence. A reader acting on that goes looking for evidence that is
+        # already in front of them.
+        if root_cause is not None and getattr(root_cause, "is_conclusive", False):
+            if approval is not None and not approval.approved:
+                return (
+                    f"Root cause identified: {root_cause.root_cause}. The proposed "
+                    f"remediation was rejected by {getattr(approval, 'approver', 'a human')}, "
+                    "so no action was taken and the incident remains open."
+                )
+            return (
+                f"Root cause identified: {root_cause.root_cause}. No remediation was "
+                "applied, so the incident remains open."
+            )
         return (
             "Investigation completed without establishing a single confident root cause. "
             "The collected evidence is recorded below; escalate to a human investigator."

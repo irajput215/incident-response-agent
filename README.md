@@ -298,7 +298,14 @@ observations, ~17k estimated tokens**, in under 150 ms.
 The most important section. A project with no stated limitations reads as one whose author
 has not looked.
 
-1. **Confidence scores are LLM self-assessments, not calibrated probabilities.** They are
+1. **The real provider path has never been executed.** Every run in this repository — all 230
+   tests, all 8 evaluation tasks, the live API smoke test — went through the offline analyst.
+   `LiteLLMClient` is structurally tested (response parsing, tool-call argument decoding, the
+   structured-output repair loop) but **no HTTP request to Anthropic, OpenAI, DeepSeek or Ollama
+   has ever been made from this code.** The system is proven; the provider integration is not.
+   One API key would close this, and it is the largest gap here.
+
+2. **Confidence scores are LLM self-assessments, not calibrated probabilities.** They are
    deliberately *not* computed from evidence counts — turning "3 of 4 signals agree" into
    "0.91 confident" is numerology dressed as statistics. The right treatment is to carry
    the number as an untrusted signal and measure whether it correlates with being right.
@@ -306,48 +313,48 @@ has not looked.
    calibration. Doing this properly needs a labelled set large enough to bin, which five
    scenarios are not.
 
-2. **The pipeline estate is simulated.** Logs and warehouse tables are generated fixtures.
+3. **The pipeline estate is simulated.** Logs and warehouse tables are generated fixtures.
    This is deliberate — the investigation logic is the subject, not the integration surface
    — but it means the agent has never been tested against a real orchestrator's log format,
    real clock skew, or a real warehouse's permission model.
 
-3. **Remediation is simulated.** `SimulatedRemediator` records the intended action and says
+4. **Remediation is simulated.** `SimulatedRemediator` records the intended action and says
    so, loudly. There is no orchestrator connected, so "the fix was applied" means "the fix
    was recorded". The `Remediator` protocol is the seam; wiring it is real work that has not
    been done.
 
-4. **LangSmith tracing is wired but unverified without a key.** `configure_tracing()` sets
+5. **LangSmith tracing is wired but unverified without a key.** `configure_tracing()` sets
    the environment and enables LiteLLM's LangSmith callback; nodes carry `@traceable`. With
    no key configured this is exercised as a no-op, which is what CI proves. **The upload
    path itself, dataset sync and `langsmith.evaluate()` have not been run against a live
    LangSmith account.** The local harness — not LangSmith — is what gates CI.
 
-5. **The offline analyst is keyword-based and its limits are real.** It fails on failure
+6. **The offline analyst is keyword-based and its limits are real.** It fails on failure
    vocabulary it does not recognise, its severity rule is a lookup table rather than an
    impact assessment, and its regression is scoped to a documented grammar (the upstream
    pattern cannot cross brackets or newlines — see
    `test_upstream_pattern_does_not_cross_brackets_or_lines`). It is a **baseline to beat**,
    not a substitute for a model.
 
-6. **The API serves one database connection.** psycopg serialises access internally, so this
+7. **The API serves one database connection.** psycopg serialises access internally, so this
    is correct but not concurrent: two simultaneous investigations queue. A production
    deployment needs a per-request repository from a pool. The refactor was not worth doing
    before the concurrency was needed, and saying so is more useful than pretending.
 
-7. **There is no authentication, authorisation or rate limiting.** Anyone who can reach
+8. **There is no authentication, authorisation or rate limiting.** Anyone who can reach
    `POST /incidents/{id}/approve` can approve a production remediation. The approval
    endpoint records *who* approved, but nothing verifies that claim.
 
-8. **Metrics are per-process and unbounded in key space.** Counters and latency samples are
+9. **Metrics are per-process and unbounded in key space.** Counters and latency samples are
    bounded per key (`MAX_SAMPLES`), but the number of distinct keys is not, and with
    multiple uvicorn workers each holds a disjoint snapshot. A real deployment wants
    OpenTelemetry export.
 
-9. **The Docker image is built in CI but was not built locally** — the Docker daemon is not
+10. **The Docker image is built in CI but was not built locally** — the Docker daemon is not
    running on this machine — so the `docker compose` path is authored and reviewed, not
    executed end to end here.
 
-10. **No coverage measurement.** The suite is broad but nothing asserts a coverage floor, so
+11. **No coverage measurement.** The suite is broad but nothing asserts a coverage floor, so
     an untested branch can be added without the build noticing.
 
 ---

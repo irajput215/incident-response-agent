@@ -154,6 +154,45 @@ def test_a_bare_boolean_decision_is_accepted(agent: IncidentAgent) -> None:
     assert resumed.report.approval.approver == "unknown"
 
 
+def test_a_rejected_remediation_does_not_claim_there_was_no_root_cause(
+    agent: IncidentAgent,
+) -> None:
+    """The report used to contradict itself.
+
+    Rejecting a remediation sets status UNRESOLVED, and the summary then said "no
+    confident root cause was established" — printed directly above a root cause at
+    0.90 confidence. A reader acting on that goes looking for evidence already in
+    front of them, and might re-investigate an incident that is fully understood.
+    """
+    outcome = agent.investigate(alert_for("missing_partition"))
+    resumed = agent.resume(
+        outcome.investigation_id,
+        ApprovalDecision(approved=False, approver="sre@acme.example", note="not yet"),
+    )
+    assert resumed.report is not None
+    summary = resumed.report.summary.lower()
+
+    assert "without establishing a single confident root cause" not in summary
+    assert "upstream" in summary, "the summary must name the cause it found"
+    assert "rejected" in summary
+    assert "sre@acme.example" in resumed.report.summary
+
+
+def test_an_unknown_incident_summary_still_admits_it_could_not_conclude(
+    seeded_estate, repository, metrics, llm
+) -> None:
+    """The other half of the same branch: with genuinely no cause, say so."""
+    candidate = IncidentAgent(
+        settings=seeded_estate, repository=repository, metrics=metrics, llm=llm
+    )
+    outcome = run_to_completion(
+        candidate,
+        IncidentCreate(pipeline="mystery_two", run_id="r11", timestamp=FIXED_TS, error="who knows"),
+    )
+    assert outcome.report is not None
+    assert "without establishing a single confident root cause" in outcome.report.summary
+
+
 def test_a_low_risk_action_does_not_need_a_human(agent: IncidentAgent) -> None:
     """Approval is required for data changes, not for notifying an owner."""
     outcome = agent.investigate(alert_for("schema_change"))
