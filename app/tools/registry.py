@@ -151,11 +151,11 @@ class ToolRegistry:
     def call(self, name: str, arguments: dict[str, Any] | None = None) -> ToolResult:
         """Validate and run a tool. Never raises for a tool-level failure.
 
-        An unknown tool name is one of those failures, not an exception. The
-        planner is supposed to have already dropped hallucinated tools, but
-        defence in depth means the call path has to survive a name that slipped
-        through — and "the run died because the model invented a tool" is not an
-        acceptable failure mode for an incident-response system.
+        An unknown tool name is one of those failures, not an exception. This is
+        the single point where a hallucinated tool is caught — there is no
+        plan-validation step upstream — so surviving it is what keeps "the run
+        died because the model invented a tool" out of this system's failure
+        modes.
         """
         arguments = arguments or {}
 

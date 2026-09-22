@@ -5,7 +5,7 @@ observability into finished code is miserable:
 
 * **``log(logger, level, "event_name", **fields)``** — the ``msg`` is a *stable,
   machine-readable event name* (``incident_triaged``, ``tool_called``,
-  ``node_failed``), never a sentence. You must be able to write
+  ``tool_failed``), never a sentence. You must be able to write
   ``msg="tool_called"`` in a query; ``print("called the tool!")`` is unparseable.
 
 * **``Metrics``** — counters and latency percentiles, passed in explicitly

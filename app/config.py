@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     log_json: bool = Field(default=True)  # JSON to stderr; False = human console
 
     # --- LLM (provider-agnostic, via LiteLLM) ------------------------------
-    # Empty == run the deterministic stub. See app/llm/stub.py.
+    # Empty == run the deterministic offline analyst. See app/llm/heuristic.py.
     llm_model: str = Field(default="")
     llm_temperature: float = Field(default=0.0)
     llm_timeout_s: float = Field(default=60.0)
