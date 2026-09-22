@@ -225,7 +225,7 @@ undocumented gets trusted beyond them:
 * `statement_timeout` bounds runtime, not the cost of a scan already underway.
 * Resource exhaustion via a pathological query is mitigated, not prevented.
 
-The guard is tested against 18 adversarial inputs plus 8 legitimate ones
+The guard is tested against 20 adversarial inputs plus 8 legitimate ones
 (`tests/test_sql_guard.py`), including the multi-statement bypass, the data-modifying CTE,
 `SELECT ... INTO`, `COPY ... TO` and cross-schema reads.
 
@@ -278,7 +278,7 @@ Numbers from an actual run on this machine, not aspirations:
 | Test suite passes | `228 passed` (config, observability, SQL guard, tools, analyst, persistence, graph, API, evaluation) |
 | Agent evaluation passes | `8/8 = 100%`, exit code 0, no API key present |
 | Lint and types clean | `ruff check` → *All checks passed*; `mypy` → *no issues found in 38 source files* |
-| SQL guard holds | 18/18 adversarial inputs rejected, 8/8 legitimate queries allowed, target table intact after every attack |
+| SQL guard holds | 20/20 adversarial inputs rejected, 8/8 legitimate queries allowed, target table intact after every attack |
 | Root causes are right | 5/5 scenario categories, and the upstream case names `claims_ingestion` as the fix target |
 | It investigates rather than pattern-matches | The vague-error task still reaches `UPSTREAM_DEPENDENCY_FAILURE` |
 | It refuses to guess | The unknown-pipeline task ends `UNRESOLVED` with confidence 0.20 |
