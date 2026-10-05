@@ -32,6 +32,8 @@ node, tool call, observation, token and millisecond — so the report can state 
 
 ## Architecture
 
+[![Interactive GitDiagram](https://img.shields.io/badge/Interactive_Architecture-GitDiagram-2563eb?style=for-the-badge&logo=diagramsdotnet)](https://gitdiagram.com/irajput215/incident-response-agent)
+
 ### Control flow
 
 A LangGraph state machine. This diagram is generated from the compiled graph
